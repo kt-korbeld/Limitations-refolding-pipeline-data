@@ -1,0 +1,8 @@
+#jupyter notebook
+.ipynb_checkpoints/
+
+#macOS
+.DS_Store
+
+# byte-compiled files
+**/__pycache__/
