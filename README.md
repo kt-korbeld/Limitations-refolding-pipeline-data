@@ -1,3 +1,6 @@
+
+[![DOI](https://zenodo.org/badge/1113135071.svg)](https://doi.org/10.5281/zenodo.18838498)
+
 # Limitations of the refolding pipeline for de novo protein design
 
 The preprint can be found here: https://doi.org/10.64898/2025.12.09.693122 
