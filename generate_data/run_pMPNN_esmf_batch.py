@@ -32,10 +32,16 @@ def calc_aligned_rmsd(pos_1, pos_2):
 	aligned_pos_1 = du.rigid_transform_3D(pos_1, pos_2)[0]
 	return np.mean(np.linalg.norm(aligned_pos_1 - pos_2, axis=-1))
 
-def get_plddt(loc):
-	struct = bsio.load_structure(loc, extra_fields=["b_factor"])
-	plddt = round(struct.b_factor.mean(),2)
-	return plddt
+def get_plddt(loc, per_res=True):
+    '''
+    set per_res to False to calculate the average pLDDT over all atoms 
+    (as done in the original data). Set to True to get the more common pLDDT averaged per residue
+    '''
+    struct = bsio.load_structure(loc, extra_fields=["b_factor"])
+    if per_res:
+        struct = struct[struct.atom_name == 'CA']
+    plddt = round(struct.b_factor.mean(),2)
+    return plddt
 
 def run_pMPNN_esmf_batch(
 		pmpnn_dir: str,

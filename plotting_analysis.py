@@ -121,6 +121,98 @@ def lineplot_des_plddt_as_3(list_dfs: list[list[pd.DataFrame]], folder_outputs: 
     plt.savefig(os.path.join(folder_outputs, output_name), dpi=300, bbox_inches='tight')
     plt.show()
 
+def make_data_energysap(energy_sap_data:pd.DataFrame, order=None):
+    '''
+    Fig 2
+    load in data for the energy/sap of scrambled mutations
+    '''
+    for pdb_name in energy_sap_data['pdb_name'].unique():
+        subset_data = energy_sap_data[energy_sap_data['pdb_name'] == pdb_name]
+        wt_data = subset_data[subset_data['header'] == 'native']
+        if not wt_data.empty:
+            avg_energy = np.mean(wt_data['energy'])
+            energy_sap_data.loc[subset_data.index, 'd_energy'] = subset_data['energy'] - avg_energy
+    # # calculate energy and sap per residue
+    energy_sap_data['d_energy_res'] = energy_sap_data.d_energy.values / energy_sap_data.length.values
+    energy_sap_data['sap_res'] = energy_sap_data.sap.values / energy_sap_data.length.values
+    # # check if designable (one native structure has rmsd of 2.006, for simplicity i have tweaked cutoff to take it along)
+    energy_sap_data['designable'] = np.logical_and(energy_sap_data.sc_rmsd <= 2.007, energy_sap_data.plddt >= 70)
+    # # make sure the native sequences are not repeated
+    nativeind = energy_sap_data[energy_sap_data.header == 'native'].drop_duplicates(subset=['pdb_name'], keep='first').index
+    nonnativeind = energy_sap_data[energy_sap_data.header != 'native'].index
+    energy_sap_data = energy_sap_data.loc[list(nativeind)+list(nonnativeind)]
+    # # change frac of native sequences to 'native' for easier selection
+    energy_sap_data['frac'] = len(nativeind)*[0.0]+list(energy_sap_data.loc[nonnativeind].frac.values)
+    df_in = energy_sap_data[energy_sap_data.designable]
+
+    seq_counts = []
+    for frac in order:
+        seq_counts.append(len(df_in[df_in.frac == frac]))
+    
+    return df_in, seq_counts
+
+def plot_energy(df_in, seq_counts, order=None, out_folder:str=None):
+    '''
+    Fig 2
+    plot energy for scrambled sequences
+    '''
+    plt.figure(figsize=(7.5, 6))
+    palette = sns.color_palette("Blues", n_colors=8).as_hex()
+    # Stripplot
+    sns.stripplot(data=df_in, x='frac', y='energy', jitter=True, 
+                  s=1.8, zorder=1, color='0.3', alpha=0.7, order=order)
+    # Boxplot
+    ax = sns.boxplot(data=df_in, x='frac', y='energy', hue='frac', 
+                     palette=palette, showfliers=False, hue_order=order, linecolor='black',
+                     linewidth=2.0)
+    ax.set_ylim(-200, 1500)
+    ax.set_ylabel('Energy (ref2015)', fontsize=30, labelpad=10)
+    ax.set_xlabel('Fraction of mutated residues', fontsize=30, labelpad=10)
+    ax.legend_.remove()
+    # Twin axis for sequence count
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(seq_counts, fontsize=20)
+    # ax2.set_xlabel('Number of structures', fontsize=28, labelpad=10)
+    ax.tick_params(axis='both', which='major', labelsize=27)
+    sns.despine()
+    plt.savefig(os.path.join(out_folder, 'energy_scrambled_50_msa.png'), dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_sap(df_in, seq_counts, order=None, out_folder:str=None):
+    '''
+    Fig 2
+    plot SAP for scrambled sequences
+    '''
+    plt.figure(figsize=(7.5, 6))
+    palette = sns.color_palette("Blues", n_colors=8).as_hex()
+    # Stripplot
+    sns.stripplot(data=df_in, x='frac', y='sap', jitter=True, 
+                  s=1.8, zorder=1, color='0.3', alpha=0.7, order=order)
+    sample = df_in[(df_in['pdb_name'] == 'd1ew4a') & (df_in['header'] == 'sample_43')]
+    # Boxplot
+    ax = sns.boxplot(data=df_in, x='frac', y='sap', hue='frac',
+                     palette=palette, showfliers=False, hue_order=order, linecolor='black',
+                     linewidth=2.0, width=.7)
+    ax.set_ylim(0, 120)
+    ax.set_ylabel('SAP score', fontsize=30, labelpad=10)
+    ax.set_xlabel('Fraction of mutated residues', fontsize=30, labelpad=10)
+    ax.legend_.remove()
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: '{:.1f}'.format(x)))
+    # Twin axis for sequence count
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(seq_counts, fontsize=20)
+    # ax2.set_xlabel('Number of structures', fontsize=28, labelpad=10)
+    ax.tick_params(axis='both', which='major', labelsize=27)
+    # format yticks as integers
+    ax.yaxis.get_major_locator().set_params(integer=True)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: '{:.0f}'.format(x)))
+    sns.despine()
+    plt.savefig(os.path.join(out_folder, 'total_sap_scrambled_50_msa.png'), dpi=300, bbox_inches='tight')
+
 # ==============================
 # Fig 3 — Experimental benchmark
 # ==============================
@@ -198,9 +290,11 @@ def plot_bar_metrics(df_plot:pd.DataFrame, metric:str='AUC pLDDT',
     '''
     # plot figure
     if outline:
-        sns.barplot(data=df_plot, x='name', y=metric, hue='annot', palette=palette, alpha=0.7, legend=legend, lw=1, ec='black')
+        ax = sns.barplot(data=df_plot, x='name', y=metric, hue='annot', palette=palette, alpha=0.6, legend=legend, lw=1.6, ec='black')
+        #bar_x = np.array([[bar.get_x() + bar.get_width()/2 for bar in bars] for bars in ax.containers]).flatten()
+        #bar_y = np.array([[bar.get_height() for bar in bars] for bars in ax.containers]).flatten()
     else:
-        sns.barplot(data=df_plot, x='name', y=metric, hue='annot', palette=palette, alpha=0.7, legend=legend)
+        ax = sns.barplot(data=df_plot, x='name', y=metric, hue='annot', palette=palette, alpha=0.7, legend=legend)
     plt.ylabel(metric, fontsize=30, labelpad=10)
     plt.xlabel('')
     plt.xticks(fontsize=22, rotation=15)
@@ -214,6 +308,7 @@ def plot_bar_metrics(df_plot:pd.DataFrame, metric:str='AUC pLDDT',
             lh.set_alpha(1)
     #plt.savefig(os.path.join(folder_outputs, name_out), bbox_inches='tight', dpi=300)
     #plt.show()
+    return ax
 
 def plot_bar_metrics_overlap(df3:pd.DataFrame, df48:pd.DataFrame, metric:str, name_out:str, 
                              folder_outputs:str = '.', palette:list = ['#40498e','#A173CF','#357ba3'], legend=True):
@@ -224,8 +319,14 @@ def plot_bar_metrics_overlap(df3:pd.DataFrame, df48:pd.DataFrame, metric:str, na
     # plot figure overlapping 3 and 48 recycles
     plt.figure(figsize=(13, 6))
     palette = ['#40498e','#A173CF','#357ba3']
-    plot_bar_metrics(df48, metric=metric, legend=False, palette=palette)
-    plot_bar_metrics(df3, metric=metric, outline=True, legend=legend, palette=palette)
+    ax = plot_bar_metrics(df48, metric=metric, legend=False, palette=palette)
+    ax = plot_bar_metrics(df3, metric=metric, outline=True, legend=legend, palette=palette)
+    # add scatter to clarify
+    bar_x = np.array([[bar.get_x() + bar.get_width()/2 for bar in bars] for bars in ax.containers]).flatten()
+    bar_y = np.array([[bar.get_height() for bar in bars] for bars in ax.containers]).flatten()
+    plt.scatter(bar_x[:int(len(bar_x)/2)], bar_y[:int(len(bar_y)/2)], s=30, facecolors='none', edgecolors='black')
+    plt.scatter(bar_x[int(len(bar_x)/2):], bar_y[int(len(bar_y)/2):], s=30, facecolors='black', edgecolors='black')
+    # add lines
     plt.vlines(6.5,1,0, color='grey', linestyles='dashed')
     plt.hlines(0.5,-10,10, color='grey', linestyles='dashed', zorder=-1)
     plt.ylim(0, 1)

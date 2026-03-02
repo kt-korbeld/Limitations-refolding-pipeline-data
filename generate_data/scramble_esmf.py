@@ -109,8 +109,14 @@ def make_scramble(folder:str, num_samples:int, pct_scr_list:list=[0.1, 0.2, 0.4,
         scrambled_seqs = scramble_sequence(seq_list=seq_chain, num_seqs=num_samples, folder_out=os.path.join(folder, pdb_name), pct_scr_list=pct_scr_list, seed=seed)
     return None
 
-def get_plddt(loc):
+def get_plddt(loc, per_res=True):
+    '''
+    set per_res to False to calculate the average pLDDT over all atoms 
+    (as done in the original data). Set to True to get the more common pLDDT averaged per residue
+    '''
     struct = bsio.load_structure(loc, extra_fields=["b_factor"])
+    if per_res:
+        struct = struct[struct.atom_name == 'CA']
     plddt = round(struct.b_factor.mean(),2)
     return plddt
 
