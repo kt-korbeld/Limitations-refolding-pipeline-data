@@ -1097,7 +1097,7 @@ def plot_bar_avg_af2rank_re(roc_rank_plddt, roc_rank_rmsd, roc_rank_composite, l
     df_out['metric'] = df_out.index
     
     plt.figure(figsize=(6,7))
-    sns.barplot(df_out, x='metric', hue='variable', y='value', palette= ['#40498e','#A173CF','#357ba3'])
+    sns.barplot(df_out, x='metric', hue='variable', y='value', palette= ['#a3cef1', 'tab:blue', '#274c77'])
     plt.ylabel('mean AUC', fontsize=30, labelpad=10)
     plt.xlabel('')
     plt.xticks(fontsize=22, rotation=15)
