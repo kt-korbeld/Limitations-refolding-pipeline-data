@@ -998,8 +998,119 @@ def plot_violin_soluprot_nopdb(plot_df, name_out='out.png'):
     plt.tight_layout()
     plt.savefig(name_out, dpi=300, bbox_inches='tight')
 
+
 # ==============================
-# Fig S6-8 — Optimal Thresholds
+# Fig S6 - AF2Rank analysis
+# ==============================
+
+def rescale(a,amin=None,amax=None):  
+    a = np.copy(a)
+    if amin is None: amin = a.min()
+    if amax is None: amax = a.max()
+    a[a < amin] = amin
+    a[a > amax] = amax
+    return (a - amin)/(amax - amin)
+
+def make_roclist(dfs_dataset, df_exp, dataset_order, metrics, scale=1):
+    roc_out = []
+    for dataset in dataset_order:
+        # get correct data subsets
+        ind = df_exp[df_exp['data'] == dataset].index
+        dfs_dataset_sel = [i.loc[ind] for i in dfs_dataset]
+        # calcuate roc for pLDDT and scRMSD
+        roc = [compute_roc_metrics(df_exp.loc[ind].monomeric.astype(int), scale*vals[m].values) for vals, m in zip(dfs_dataset_sel, metrics)]
+        # prepare plotting df
+        roc_out+=roc
+    return roc_out
+
+def plot_bar_metrics_overlap_af2rank(df_re3, df_re48, folder_outputs='.', name_out='out.png', ylabel='pLDDT AUC'):
+    '''
+    plot AF2Rank vs AF2 ss per dataset
+    '''
+    # combine data to plot per dataset
+    df_comb_re3 = pd.DataFrame(data=np.array(df_re3).T, index=dataset_order, columns=['AF2 ss', 'AF2Rank'])
+    df_comb_re3 = df_comb_re3.melt(ignore_index=False)
+    df_comb_re3['data'] = df_comb_re3.index
+    df_comb_re48 = pd.DataFrame(data=np.array(df_re48).T, index=dataset_order, columns=['AF2 ss', 'AF2Rank'])
+    df_comb_re48 = df_comb_re48.melt(ignore_index=False)
+    df_comb_re48['data'] = df_comb_re48.index
+    # plot data
+    palette = ['#40498e', 'tab:blue']
+    plt.figure(figsize=(10.5, 6))
+    ax = sns.barplot(data=df_comb_re48, x='data', y='value', hue='variable', alpha=0.7, palette=palette)
+    ax = sns.barplot(data=df_comb_re3, x='data', y='value', hue='variable', alpha=0.7, lw=1.6, ec='black', palette=palette)
+    # plot dots to indicate 3 vs 48 recycles
+    bar_x = np.array([[bar.get_x() + bar.get_width()/2 for bar in bars] for bars in ax.containers]).flatten()
+    bar_y = np.array([[bar.get_height() for bar in bars] for bars in ax.containers]).flatten()
+    plt.scatter(bar_x[:int(len(bar_x)/2)], bar_y[:int(len(bar_y)/2)], s=30, facecolors='none', edgecolors='black')
+    plt.scatter(bar_x[int(len(bar_x)/2):], bar_y[int(len(bar_y)/2):], s=30, facecolors='black', edgecolors='black')
+    # adjust figure
+    ax.get_legend().remove()
+    plt.ylabel(ylabel, fontsize=30, labelpad=10)
+    plt.xlabel('')
+    plt.xticks(fontsize=22, rotation=15)
+    plt.yticks(fontsize=22)
+    sns.despine()
+    plt.tight_layout()
+    plt.ylim(0, 1.0)
+    plt.savefig(os.path.join(folder_outputs, name_out), bbox_inches='tight', dpi=300)
+    plt.show()
+
+def plot_bar_avg_af2rank(roc_avg_plddt, roc_avg_rmsd, roc_avg_composite, len_datasets,
+                         folder_outputs='.', name_out='out.png'):
+    '''
+    Plot AF2Rank vs AF2 ss as averaged AUC
+    '''
+    # calculate weighted averages
+    wavg_plddt = np.sum(np.array(roc_avg_plddt).reshape(6,2).T*len_datasets, axis=1) / sum(len_datasets)
+    wavg_rmsd = np.sum(np.array(roc_avg_rmsd).reshape(6,2).T*len_datasets, axis=1) / sum(len_datasets)
+    wavg_comp = np.sum(np.array(roc_avg_composite).reshape(6,2).T*len_datasets, axis=1) / sum(len_datasets)
+    # create dataframe
+    df_out =pd.DataFrame(data=np.array([wavg_plddt, wavg_rmsd, wavg_comp]), index=['pLDDT', 'scRMSD', 'composite'], columns=['AF2 ss', 'AF2Rank templates'])
+    df_out = df_out.melt(ignore_index=False)
+    df_out['metric'] = df_out.index
+    # customise plot
+    plt.figure(figsize=(6,7))
+    sns.barplot(df_out, x='metric', hue='variable', y='value', palette = ['#40498e', 'tab:blue'])
+    plt.ylabel('mean AUC', fontsize=30, labelpad=10)
+    plt.xlabel('')
+    plt.xticks(fontsize=22, rotation=15)
+    plt.yticks(fontsize=22)
+    sns.despine()
+    plt.tight_layout()
+    plt.ylim(0, 1.0)
+    plt.legend(fontsize=16, frameon=False)
+    plt.savefig(os.path.join(folder_outputs, name_out), bbox_inches='tight', dpi=300)
+    plt.show()
+
+def plot_bar_avg_af2rank_re(roc_rank_plddt, roc_rank_rmsd, roc_rank_composite, len_datasets,
+                         folder_outputs='.', name_out='out.png'):
+    '''
+    plot AF2Rank as function of recycles
+    '''
+    wavg_plddt = np.sum(np.array(roc_rank_plddt).reshape(6,3).T*len_datasets, axis=1) / sum(len_datasets)
+    wavg_rmsd = np.sum(np.array(roc_rank_rmsd).reshape(6,3).T*len_datasets, axis=1) / sum(len_datasets)
+    wavg_comp = np.sum(np.array(roc_rank_composite).reshape(6,3).T*len_datasets, axis=1) / sum(len_datasets)
+    
+    df_out = pd.DataFrame(data=np.array([wavg_plddt, wavg_rmsd, wavg_comp]), index=['pLDDT', 'scRMSD', 'composite'], columns=['1 recycle', '3 recycles', '48 recycles'])
+    df_out = df_out.melt(ignore_index=False)
+    df_out['metric'] = df_out.index
+    
+    plt.figure(figsize=(6,7))
+    sns.barplot(df_out, x='metric', hue='variable', y='value', palette= ['#40498e','#A173CF','#357ba3'])
+    plt.ylabel('mean AUC', fontsize=30, labelpad=10)
+    plt.xlabel('')
+    plt.xticks(fontsize=22, rotation=15)
+    plt.yticks(fontsize=22)
+    sns.despine()
+    plt.tight_layout()
+    plt.ylim(0, 1.0)
+    plt.legend(fontsize=16, frameon=False)
+    plt.savefig(os.path.join(folder_outputs, name_out), bbox_inches='tight', dpi=300)
+    plt.show()
+    
+# ==============================
+# Fig S7-9 — Optimal Thresholds
 # ==============================
 
 def compute_conf_metrics (true_vals, plddt_vals, rmsd_vals, name, rmsd_cutoff=2, plddt_cutoff=80):
